@@ -64,6 +64,13 @@
   :type 'boolean
   :group 'dired-rsync)
 
+(defcustom dired-rsync-cygdrive-path "/cygdrive"
+  "Path modification for drive letters, as used by cygwin and expected by rsync.
+On windows, all paths starting with a drive letter will be modified accordingly.
+Set to nil to disable the modification."
+  :type '(choice string (const :tag "No modification" nil))
+  :group 'dired-rsync)
+
 ;; Internal variables
 (defvar dired-rsync-job-count 0
   "Count of running rsync jobs.")
@@ -89,6 +96,18 @@
       (let ((parts (s-split ":" file-or-path)))
         (format "%s:\"%s\"" (nth 1 parts) (shell-quote-argument (nth 2 parts))))
     (shell-quote-argument file-or-path)))
+
+(defun dired-rsync--maybe-convert-from-windows (file-or-path)
+  "On Windows, replace leading drive letters by /cygdrive/<letter>.
+This is the standard path for drives used by cygwin and
+the syntax needed by rsync."
+  (if (and (string-equal system-type "windows-nt") dired-rsync-cygdrive-path)
+      (replace-regexp-in-string
+       "^\\([a-zA-Z]\\):/"
+       (concat (file-name-as-directory dired-rsync-cygdrive-path) "\\1/")
+       file-or-path)
+    file-or-path)
+  )
 
 ;; Update status with count/speed
 (defun dired-rsync--update-modeline (&optional err ind)
@@ -210,8 +229,10 @@ ssh/scp tramp connections."
 
   (let ((src-files (-map
                     'dired-rsync--quote-and-maybe-convert-from-tramp
-                    (dired-get-marked-files nil current-prefix-arg)))
-        (final-dest (dired-rsync--quote-and-maybe-convert-from-tramp dest)))
+                    (-map 'dired-rsync--maybe-convert-from-windows
+                          (dired-get-marked-files nil current-prefix-arg))))
+        (final-dest (dired-rsync--quote-and-maybe-convert-from-tramp
+                     (dired-rsync--maybe-convert-from-windows dest))))
 
     ;; now build the rsync command
     (let ((cmd (s-join " "
