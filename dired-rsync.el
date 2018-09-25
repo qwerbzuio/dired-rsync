@@ -64,10 +64,18 @@
   :type 'boolean
   :group 'dired-rsync)
 
-(defcustom dired-rsync-cygdrive-path "/cygdrive"
-  "Path modification for drive letters, as used by cygwin and expected by rsync.
-On windows, all paths starting with a drive letter will be modified accordingly.
-Set to nil to disable the modification."
+(defun dired-rsync--default-cygdrive-path ()
+  (cond ((memq system-type '(ms-dos windows-nt))
+	 "/cygdrive")
+	(t nil)))
+
+(defcustom dired-rsync-cygdrive-path (dired-rsync--default-cygdrive-path)
+  "Path prefix for drive letters, as used by Cygwin and expected by rsync.
+On operating systems other than Microsoft Windows this variable
+has no effect.
+
+On MS Windows, all paths starting with a drive letter will be
+modified accordingly.  Set to nil to disable path-modification."
   :type '(choice string (const :tag "No modification" nil))
   :group 'dired-rsync)
 
@@ -98,16 +106,16 @@ Set to nil to disable the modification."
     (shell-quote-argument file-or-path)))
 
 (defun dired-rsync--maybe-convert-from-windows (file-or-path)
-  "On Windows, replace leading drive letters by /cygdrive/<letter>.
-This is the standard path for drives used by cygwin and
-the syntax needed by rsync."
-  (if (and (string-equal system-type "windows-nt") dired-rsync-cygdrive-path)
+  "On Microsoft Windows, replace leading drive letters by /cygdrive/<letter>.
+This syntax is needed by rsync. The path can be configured in the
+variable `dired-rsync-cygdrive-path'."
+  (if (and (memq system-type '(ms-dos windows-nt cygwin))
+	   dired-rsync-cygdrive-path)
       (replace-regexp-in-string
        "^\\([a-zA-Z]\\):/"
-       (concat (file-name-as-directory dired-rsync-cygdrive-path) "\\1/")
-       file-or-path)
-    file-or-path)
-  )
+       (concat (file-name-as-directory
+		dired-rsync-cygdrive-path) "\\1/") file-or-path)
+    file-or-path) )
 
 ;; Update status with count/speed
 (defun dired-rsync--update-modeline (&optional err ind)
